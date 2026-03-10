@@ -1,10 +1,10 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
 import { styles } from "../styles";
 import { SectionWrapper } from "../hoc";
 import { fadeIn, textVariant } from "../utils/motion";
-import { testimonials } from "../constants";
+import { supabase } from "../lib/supabaseClient";
 
 const FeedbackCard = ({
   index,
@@ -33,17 +33,41 @@ const FeedbackCard = ({
           </p>
         </div>
 
-        <img
-          src={image}
-          alt={`feedback_by-${name}`}
-          className='w-10 h-10 rounded-full object-cover'
-        />
+        {image ? (
+          <img
+            src={image}
+            alt={`feedback_by-${name}`}
+            className='w-10 h-10 rounded-full object-cover'
+          />
+        ) : (
+          <div className='w-10 h-10 rounded-full bg-[#151030] border border-[#232323] flex items-center justify-center text-xs text-secondary'>
+            {name ? name.charAt(0).toUpperCase() : "?"}
+          </div>
+        )}
       </div>
     </div>
   </motion.div>
 );
 
 const Feedbacks = () => {
+  const [testimonials, setTestimonials] = useState([]);
+
+  useEffect(() => {
+    const loadTestimonials = async () => {
+      const { data, error } = await supabase
+        .from("testimonials")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.error(error);
+        return;
+      }
+      setTestimonials(data || []);
+    };
+
+    loadTestimonials();
+  }, []);
+
   return (
     <div className={`mt-12 bg-black-100 rounded-[20px]`}>
       <div
@@ -56,7 +80,7 @@ const Feedbacks = () => {
       </div>
       <div className={`-mt-20 pb-14 ${styles.paddingX} flex flex-wrap gap-7`}>
         {testimonials.map((testimonial, index) => (
-          <FeedbackCard key={testimonial.name} index={index} {...testimonial} />
+          <FeedbackCard key={testimonial.id || testimonial.name} index={index} {...testimonial} />
         ))}
       </div>
     </div>

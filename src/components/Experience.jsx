@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   VerticalTimeline,
   VerticalTimelineElement,
@@ -8,9 +8,9 @@ import { motion } from "framer-motion";
 import "react-vertical-timeline-component/style.min.css";
 
 import { styles } from "../styles";
-import { experiences } from "../constants";
 import { SectionWrapper } from "../hoc";
 import { textVariant } from "../utils/motion";
+import { supabase } from "../lib/supabaseClient";
 
 const ExperienceCard = ({ experience }) => {
   return (
@@ -20,43 +20,114 @@ const ExperienceCard = ({ experience }) => {
         color: "#fff",
       }}
       contentArrowStyle={{ borderRight: "7px solid  #232631" }}
-      date={experience.date}
-      iconStyle={{ background: experience.iconBg }}
+      date={experience.date_range}
+      iconStyle={{ background: "#383E56" }}
       icon={
         <div className='flex justify-center items-center w-full h-full'>
-          <img
-            src={experience.icon}
-            alt={experience.company_name}
-            className='w-[60%] h-[60%] object-contain'
-          />
+          <span className="text-white font-bold text-lg">
+            {experience.company?.[0] || "W"}
+          </span>
         </div>
       }
     >
       <div>
-        <h3 className='text-white text-[24px] font-bold'>{experience.title}</h3>
+        <h3 className='text-white text-[24px] font-bold'>{experience.role}</h3>
         <p
           className='text-secondary text-[16px] font-semibold'
           style={{ margin: 0 }}
         >
-          {experience.company_name}
+          {experience.company}
         </p>
       </div>
 
       <ul className='mt-5 list-disc ml-5 space-y-2'>
-        {experience.points.map((point, index) => (
-          <li
-            key={`experience-point-${index}`}
-            className='text-white-100 text-[14px] pl-1 tracking-wider'
-          >
-            {point}
+        {experience.description && (
+          <li className='text-white-100 text-[14px] pl-1 tracking-wider'>
+            {experience.description}
           </li>
-        ))}
+        )}
+        {experience.tags &&
+          String(experience.tags)
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+            .map((tag, index) => (
+              <li
+                key={`experience-tag-${index}`}
+                className='text-white-100 text-[13px] pl-1 tracking-wider'
+              >
+                <span className="text-[#00cea8] font-semibold mr-1">
+                  Tag:
+                </span>
+                {tag}
+              </li>
+            ))}
+        {experience.attachments &&
+          experience.attachments.length > 0 && (
+            <li className='text-white-100 text-[13px] pl-1 tracking-wider'>
+              <span className="text-[#00cea8] font-semibold mr-1">
+                Attachments:
+              </span>
+              {experience.attachments.map((file) => (
+                <button
+                  key={file.id}
+                  onClick={() => window.open(file.file_url, "_blank")}
+                  className="text-sm text-secondary hover:text-white underline mr-3"
+                >
+                  {file.file_name || "View file"}
+                </button>
+              ))}
+            </li>
+          )}
       </ul>
     </VerticalTimelineElement>
   );
 };
 
 const Experience = () => {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    const load = async () => {
+      const [{ data: expData, error: expError }, { data: fileData, error: fileError }] =
+        await Promise.all([
+          supabase
+            .from("work_experiences")
+            .select("*")
+            .order("sort_order", { ascending: true }),
+          supabase
+            .from("work_experience_files")
+            .select("*")
+            .order("created_at", { ascending: true }),
+        ]);
+
+      if (expError) {
+        console.error(expError);
+      }
+      if (fileError) {
+        console.error(fileError);
+      }
+
+      const byExperience =
+        (fileData || []).reduce((acc, file) => {
+          const key = file.experience_id;
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(file);
+          return acc;
+        }, {}) || {};
+
+      const mapped =
+        (expData || []).map((exp) => ({
+          ...exp,
+          attachments: byExperience[exp.id] || [],
+        })) || [];
+
+      setItems(mapped);
+    };
+
+    load();
+  }, []);
+
   return (
     <>
       <motion.div variants={textVariant()}>
@@ -70,13 +141,19 @@ const Experience = () => {
 
       <div className='mt-20 flex flex-col'>
         <VerticalTimeline>
-          {experiences.map((experience, index) => (
+          {items.map((experience) => (
             <ExperienceCard
-              key={`experience-${index}`}
+              key={experience.id}
               experience={experience}
             />
           ))}
         </VerticalTimeline>
+        {items.length === 0 && (
+          <p className="text-center text-secondary text-sm mt-8">
+            No work experiences found. Add them from the admin dashboard
+            (Content tab).
+          </p>
+        )}
       </div>
     </>
   );
